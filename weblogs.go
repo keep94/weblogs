@@ -53,7 +53,7 @@ func Handler(handler http.Handler) http.Handler {
 
 // Writer returns a writer whereby the caller can add additional information
 // to the current log entry. If the handler calling this is not wrapped by
-// the LogHandler() method, then writing to the returned io.Writer does
+// the Handler() method, then writing to the returned io.Writer does
 // nothing.
 func Writer(r *http.Request) io.Writer {
   value := context.Get(r, kBufferKey)
