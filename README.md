@@ -7,7 +7,7 @@ Easily add web access logs to your go http server.
 
 	import "github.com/keep94/weblogs"
 
-## installing
+## Installing
 
 	go get github.com/keep94/weblogs
 
@@ -17,9 +17,9 @@ Online documentation available [here](http://go.pkgdoc.org/github.com/keep94/web
 
 ## Dependencies
 
-	This package depends on [github.com/gorilla/context](http://github.com/gorilla/context).
+This package depends on [github.com/gorilla/context](http://github.com/gorilla/context).
 
-## Example usage
+## Example Usage
 
 	handler := context.ClearHandler(weblogs.Handler(http.DefaultServeMux))
 	http.ListenAndServe(":80", handler)
