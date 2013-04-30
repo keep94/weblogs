@@ -6,48 +6,53 @@ import (
   "github.com/keep94/weblogs"
   "net/http"
   "net/url"
-  "strings"
   "testing"
+  "time"
 )
 
 var (
   kNilResponseWriter nilResponseWriter
+  kTime = time.Date(2013, time.March, 23, 13, 14, 15, 123456789, time.UTC)
 )
+
+func now() time.Time {
+  return kTime
+}
 
 func TestNormalLogs(t *testing.T) {
   buf := &bytes.Buffer{}
   handler := weblogs.HandlerWithOptions(
-      &handler{Status: 321}, &weblogs.Options{Writer: buf})
+      &handler{Status: 321}, &weblogs.Options{Writer: buf, Now: now})
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
   actual := buf.String()
-  expected := "192.168.5.1 GET /foo/bar?query=tall 321\n"
+  expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 321\n"
   verifyLogs(t, expected, actual)
 }
 
 func TestAppendedLogs(t *testing.T) {
   buf := &bytes.Buffer{}
   handler := weblogs.HandlerWithOptions(
-      &handler{Status: 321, LogExtra: "behere"}, &weblogs.Options{Writer: buf})
+      &handler{Status: 321, LogExtra: "behere"}, &weblogs.Options{Writer: buf, Now: now})
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
   actual := buf.String()
-  expected := "192.168.5.1 GET /foo/bar?query=tall 321 behere\n"
+  expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 321 behere\n"
   verifyLogs(t, expected, actual)
 }
 
 func TestSend500OnNoOutput(t *testing.T) {
   buf := &bytes.Buffer{}
   handler := weblogs.HandlerWithOptions(
-      &handler{LogExtra: "behere"}, &weblogs.Options{Writer: buf})
+      &handler{LogExtra: "behere"}, &weblogs.Options{Writer: buf, Now: now})
   w := &spyResponseWriter{}
   handler.ServeHTTP(
       w,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
   actual := buf.String()
-  expected := "192.168.5.1 GET /foo/bar?query=tall 500 behere\n"
+  expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 500 behere\n"
   verifyLogs(t, expected, actual)
   if w.Status != 500 {
     t.Errorf("Expected 500 error to be sent, but %d was sent.", w.Status)
@@ -63,8 +68,8 @@ func TestUnwrappedCallToWriter(t *testing.T) {
 }
 
 func verifyLogs(t *testing.T, expected, actual string) {
-  if expected == actual || !strings.HasSuffix(actual, expected) {
-    t.Errorf("Expected %s to be at end of %s", expected, actual)
+  if expected != actual {
+    t.Errorf("Expected %s, got %s", expected, actual)
   }
 }
 

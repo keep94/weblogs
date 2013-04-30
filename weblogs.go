@@ -7,6 +7,7 @@ import (
   "github.com/gorilla/context"
   "io"
   "net/http"
+  "net/url"
   "os"
   "runtime/debug"
   "time"
@@ -26,8 +27,7 @@ type Snapshot interface{}
 
 type Capture interface {
   http.ResponseWriter
-  Status() int
-  IsStatusSet() bool
+  HasStatus() bool
 }
 
 type LogRecord struct {
@@ -47,6 +47,11 @@ type Logger interface {
 type Options struct {
   // Where to write the web logs. nil means write to stderr,
   Writer io.Writer
+  // How to write the web logs. nil means the following:
+  // time including milliseconds; remote address; method; url; status
+  Logger Logger
+  // How to get current time.
+  Now func() time.Time
 }
 
 func (o *Options) writer() io.Writer {
@@ -54,6 +59,20 @@ func (o *Options) writer() io.Writer {
     return os.Stderr
   }
   return o.Writer
+}
+
+func (o *Options) logger() Logger {
+  if o.Logger == nil {
+    return SimpleLogger{}
+  }
+  return o.Logger
+}
+
+func (o *Options) now() func() time.Time {
+  if o.Now == nil {
+    return time.Now
+  }
+  return o.Now
 }
 
 // Handler wraps a handler creating access logs. Returned handler must be
@@ -70,8 +89,11 @@ func HandlerWithOptions(
   if options == nil {
     options = &Options{}
   }
-  // TODO: fix.
-  return &logHandler{handler: handler}
+  return &logHandler{
+      handler: handler,
+      w: options.writer(),
+      logger: options.logger(),
+      now: options.now()}
 }
 
 // Writer returns a writer whereby the caller can add additional information
@@ -111,48 +133,96 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   h.handler.ServeHTTP(capture, r)
 }
 
-func maybeSend500(w Capture) {
-  if !w.IsStatusSet() {
-    sendError(w, http.StatusInternalServerError)
+type SimpleSnapshot struct {
+  RemoteAddr string
+  Method string
+  Proto string
+  URL *url.URL
+}
+
+type SimpleSnapshotFactory struct {
+}
+
+func (f SimpleSnapshotFactory) NewSnapshot(r *http.Request) Snapshot {
+  urlSnapshot := *r.URL
+  return &SimpleSnapshot{
+      RemoteAddr: r.RemoteAddr,
+      Method: r.Method,
+      Proto: r.Proto,
+      URL: &urlSnapshot}
+}
+
+type SimpleCapture struct {
+  http.ResponseWriter
+  Status int
+  Size int
+  statusSet bool
+}
+
+func (c *SimpleCapture) Write(b []byte) (int, error) {
+  result, err := c.ResponseWriter.Write(b)
+  c.Size += result
+  c.maybeSetStatus(http.StatusOK)
+  return result, err
+}
+
+func (c *SimpleCapture) WriteHeader(status int) {
+  c.ResponseWriter.WriteHeader(status)
+  c.maybeSetStatus(status)
+}
+
+func (c *SimpleCapture) HasStatus() bool {
+  return c.statusSet
+}
+
+func (c *SimpleCapture) maybeSetStatus(status int) {
+  if !c.statusSet {
+    c.Status = status
+    c.statusSet = true
+  }
+}
+
+type SimpleCaptureFactory struct {
+}
+
+func (f SimpleCaptureFactory) NewCapture(w http.ResponseWriter) Capture {
+  return &SimpleCapture{ResponseWriter: w}
+}
+
+type SimpleLogger struct {
+  SimpleSnapshotFactory
+  SimpleCaptureFactory
+}
+
+func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
+  s := log.R.(*SimpleSnapshot)
+  c := log.W.(*SimpleCapture)
+  if log.Extra == "" {
+    fmt.Fprintf(w, "%s %s %s %s %d\n",
+        log.T.Format("01/02/2006 15:04:05.999999"),
+        s.RemoteAddr,
+        s.Method,
+        s.URL,
+        c.Status)
+  } else {
+    fmt.Fprintf(w, "%s %s %s %s %d%s\n",
+        log.T.Format("01/02/2006 15:04:05.999999"),
+        s.RemoteAddr,
+        s.Method,
+        s.URL,
+        c.Status,
+        log.Extra)
+  }
+}
+
+func maybeSend500(c Capture) {
+  if !c.HasStatus() {
+    sendError(c, http.StatusInternalServerError)
   }
 }
 
 func sendError(w http.ResponseWriter, status int) {
   http.Error(w, fmt.Sprintf("%d %s", status, http.StatusText(status)), status)
-}
-
-type statusWriter struct {
-  http.ResponseWriter
-  status int
-  statusSet bool
-}
-
-func (w *statusWriter) MaybeSend500() {
-  if !w.statusSet {
-    sendError(w, http.StatusInternalServerError)
-  }
-}
-
-func (w *statusWriter) Write(b []byte) (int, error) {
-  result, err := w.ResponseWriter.Write(b)
-  w.maybeSetStatus(http.StatusOK)
-  return result, err
-}
-
-func (w *statusWriter) WriteHeader(status int) {
-  w.ResponseWriter.WriteHeader(status)
-  w.maybeSetStatus(status)
-}
-
-func (w *statusWriter) maybeSetStatus(status int) {
-  if !w.statusSet {
-    w.status = status
-    w.statusSet = true
-  }
-}
-
-func (w *statusWriter) Status() int {
-  return w.status
 }
 
 type nilWriter struct {
