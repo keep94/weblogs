@@ -6,10 +6,10 @@ import (
   "fmt"
   "github.com/gorilla/context"
   "io"
-  "log"
   "net/http"
   "os"
   "runtime/debug"
+  "time"
 )
 
 type contextKeyType int
@@ -22,6 +22,27 @@ var (
   kNilWriter nilWriter
 )
 
+type Snapshot interface{}
+
+type Capture interface {
+  http.ResponseWriter
+  Status() int
+  IsStatusSet() bool
+}
+
+type LogRecord struct {
+  T time.Time
+  R Snapshot
+  W Capture
+  Extra string
+}
+
+type Logger interface {
+  NewSnapshot(r *http.Request) Snapshot
+  NewCapture(w http.ResponseWriter) Capture
+  Log(w io.Writer, record *LogRecord)
+}
+  
 // Options specifies options for writing to access logs.
 type Options struct {
   // Where to write the web logs. nil means write to stderr,
@@ -49,8 +70,8 @@ func HandlerWithOptions(
   if options == nil {
     options = &Options{}
   }
-  l := log.New(options.writer(), "", log.LstdFlags | log.Lmicroseconds)
-  return &logHandler{handler: handler, alog: l}
+  // TODO: fix.
+  return &logHandler{handler: handler}
 }
 
 // Writer returns a writer whereby the caller can add additional information
@@ -67,32 +88,33 @@ func Writer(r *http.Request) io.Writer {
 
 type logHandler struct {
   handler http.Handler
-  alog *log.Logger
+  w io.Writer
+  logger Logger
+  now func() time.Time
 }
 
 func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-  remoteAddr, method, url := r.RemoteAddr, r.Method, r.URL
+  now := h.now()
+  snapshot :=  h.logger.NewSnapshot(r)
+  capture := h.logger.NewCapture(w)
   additional := &bytes.Buffer{}
   context.Set(r, kBufferKey, additional)
-  writer := &statusWriter{ResponseWriter: w}
   defer func() {
     err := recover()
-    writer.MaybeSend500()
-    var buf bytes.Buffer
-    if additional.Len() == 0 {
-      fmt.Fprintf(
-          &buf, "%s %s %s %d\n", remoteAddr, method, url, writer.Status())
-    } else {
-      fmt.Fprintf(
-          &buf, "%s %s %s %d%s\n", remoteAddr, method, url, writer.Status(), additional.String())
-    }
+    maybeSend500(capture)
+    h.logger.Log(h.w, &LogRecord{T: now, R: snapshot, W: capture, Extra: additional.String()})
     if err != nil {
-      fmt.Fprintf(&buf, "Panic: %v\n", err)
-      buf.Write(debug.Stack())
+      fmt.Fprintf(h.w, "Panic: %v\n", err)
+      h.w.Write(debug.Stack())
     }
-    h.alog.Print(buf.String())
   }()
-  h.handler.ServeHTTP(writer, r)
+  h.handler.ServeHTTP(capture, r)
+}
+
+func maybeSend500(w Capture) {
+  if !w.IsStatusSet() {
+    sendError(w, http.StatusInternalServerError)
+  }
 }
 
 func sendError(w http.ResponseWriter, status int) {
