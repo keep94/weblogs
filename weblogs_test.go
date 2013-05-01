@@ -38,11 +38,13 @@ func TestCommonLogs(t *testing.T) {
           Writer: buf,
           Logger: weblogs.ApacheCommonLogger{},
           Now: clock.Now()})
+  request := newRequest("192.168.5.1", "GET", "/foo/bar?query=tall")
+  request.URL.User = url.User("fred")
   handler.ServeHTTP(
       kNilResponseWriter,
-      newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
+      request)
   actual := buf.String()
-  expected := "192.168.5.1 - fred [03/Mar/2013:13:14:15 -0000] \"GET /foo/bar?query=tall HTTP 1.0\" 321 7\n"
+  expected := "192.168.5.1 - fred [23/Mar/2013:13:14:15 +0000] \"GET /foo/bar?query=tall HTTP/1.0\" 321 7\n"
   verifyLogs(t, expected, actual)
 }
 
@@ -112,6 +114,7 @@ func newRequest(remoteAddr, method, urlStr string) *http.Request {
   return &http.Request{
     RemoteAddr: remoteAddr,
     Method: method,
+    Proto: "HTTP/1.0",
     URL: u}
 }
 
@@ -125,7 +128,8 @@ type handler struct {
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   if h.Status != 0 {
-    http.Error(w, h.Message, h.Status)
+    w.WriteHeader(h.Status)
+    fmt.Fprintf(w, "%s", h.Message)
   }
   if h.LogExtra != "" {
     fmt.Fprintf(weblogs.Writer(r), " %s", h.LogExtra)

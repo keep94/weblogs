@@ -10,6 +10,7 @@ import (
   "net/url"
   "os"
   "runtime/debug"
+  "strings"
   "time"
 )
 
@@ -227,8 +228,31 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
 }
 
 type ApacheCommonLogger struct {
-  SimpleLogger
+  SimpleSnapshotFactory
+  SimpleCaptureFactory
 }
+
+func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
+  s := log.R.(*SimpleSnapshot)
+  c := log.W.(*SimpleCapture)
+  user := "-"
+  if s.URL.User != nil {
+    username := s.URL.User.Username()
+    if username != "" {
+      user = username
+    }
+  }
+  fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d\n",
+        strings.Split(s.RemoteAddr, ":")[0],
+        user,
+        log.T.Format("02/Jan/2006:15:04:05 -0700"),
+        s.Method,
+        s.URL.RequestURI(),
+        s.Proto,
+        c.Status,
+        c.Size)
+}
+
 
 func maybeSend500(c Capture) {
   if !c.HasStatus() {
