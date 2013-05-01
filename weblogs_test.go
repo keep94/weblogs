@@ -24,7 +24,7 @@ func TestNormalLogs(t *testing.T) {
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
-  expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 321 387\n"
+  expected := "03/23/2013 13:14:15 192.168.5.1 GET /foo/bar?query=tall 321 387\n"
   verifyLogs(t, expected, buf.String())
 }
 
@@ -82,7 +82,7 @@ func TestAppendedLogs(t *testing.T) {
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
-  expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 321 0 behere\n"
+  expected := "03/23/2013 13:14:15 192.168.5.1 GET /foo/bar?query=tall 321 0 behere\n"
   verifyLogs(t, expected, buf.String())
 }
 
@@ -96,7 +96,7 @@ func TestSend500OnNoOutput(t *testing.T) {
   handler.ServeHTTP(
       w,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
-  expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 500 23 behere\n"
+  expected := "03/23/2013 13:14:15 192.168.5.1 GET /foo/bar?query=tall 500 23 behere\n"
   verifyLogs(t, expected, buf.String())
   if w.Status != 500 {
     t.Errorf("Expected 500 error to be sent, but %d was sent.", w.Status)

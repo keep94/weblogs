@@ -248,7 +248,7 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
   s := log.R.(*ApacheCommonSnapshot)
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
-      log.T.Format("01/02/2006 15:04:05.999999"),
+      log.T.Format("01/02/2006 15:04:05"),
       s.RemoteAddr,
       s.Method,
       s.URL,
