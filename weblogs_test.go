@@ -46,6 +46,27 @@ func TestCommonLogs(t *testing.T) {
   verifyLogs(t, expected, buf.String())
 }
 
+func TestCombinedLogs(t *testing.T) {
+  buf := &bytes.Buffer{}
+  clock := &clock{Time: kTime}
+  handler := weblogs.HandlerWithOptions(
+      &handler{Status: 321, Message: "1234567"},
+      &weblogs.Options{
+          Writer: buf,
+          Logger: weblogs.ApacheCombinedLogger{},
+          Now: clock.Now()})
+  request := newRequest("192.168.5.1", "GET", "/foo/bar?query=tall")
+  request.URL.User = url.User("fred")
+  request.Header = make(http.Header)
+  request.Header.Set("Referer", "referer")
+  request.Header.Set("User-Agent", "useragent")
+  handler.ServeHTTP(
+      kNilResponseWriter,
+      request)
+  expected := "192.168.5.1 - fred [23/Mar/2013:13:14:15 +0000] \"GET /foo/bar?query=tall HTTP/1.0\" 321 7 \"referer\" \"useragent\"\n"
+  verifyLogs(t, expected, buf.String())
+}
+
 func TestApacheUser(t *testing.T) {
   verifyString(t, "-", weblogs.ApacheUser(nil))
   verifyString(t, "-", weblogs.ApacheUser(url.User("")))

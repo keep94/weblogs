@@ -177,6 +177,19 @@ func NewSimpleSnapshot(r *http.Request) SimpleSnapshot {
       URL: &urlSnapshot}
 }
 
+type ApacheCombinedSnapshot struct {
+  SimpleSnapshot
+  Referer string
+  UserAgent string
+}
+
+func NewApacheCombinedSnapshot(r *http.Request) ApacheCombinedSnapshot {
+  return ApacheCombinedSnapshot{
+      SimpleSnapshot: NewSimpleSnapshot(r),
+      Referer: r.Referer(),
+      UserAgent: r.UserAgent()}
+}
+
 // SimpleCapture provides a capture of a response that includes the http
 // status code and the size of the response.
 type SimpleCapture struct {
@@ -266,6 +279,35 @@ func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
         c.Status,
         c.Size)
 }
+
+type ApacheCombinedLogger struct {
+}
+
+func (l ApacheCombinedLogger) NewSnapshot(r *http.Request) Snapshot {
+  snapshot := NewApacheCombinedSnapshot(r)
+  return &snapshot
+}
+
+func (l ApacheCombinedLogger) NewCapture(w http.ResponseWriter) Capture {
+  return &SimpleCapture{ResponseWriter: w}
+}
+
+func (l ApacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
+  s := log.R.(*ApacheCombinedSnapshot)
+  c := log.W.(*SimpleCapture)
+  fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d \"%s\" \"%s\"\n",
+        strings.Split(s.RemoteAddr, ":")[0],
+        ApacheUser(s.URL.User),
+        log.T.Format("02/Jan/2006:15:04:05 -0700"),
+        s.Method,
+        s.URL.RequestURI(),
+        s.Proto,
+        c.Status,
+        c.Size,
+        s.Referer,
+        s.UserAgent)
+}
+
 
 // ApacheUser is a utility method for Logger implementations that converts
 // user info in a request to a string.
