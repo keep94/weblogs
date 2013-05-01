@@ -20,28 +20,40 @@ const (
   kBufferKey contextKeyType = iota
 )
 
-var (
-  kNilWriter nilWriter
-)
-
+// Snapshot represents a snapshot of an HTTP request.
 type Snapshot interface{}
 
+// Capture captures a server response. Implementations delegate to an
+// underlying ResponseWriter.
 type Capture interface {
   http.ResponseWriter
+  // HasStatus returns true if server has sent a status. False means that
+  // server failed to send a response.
   HasStatus() bool
 }
 
+// LogRecord represents a single entry in the access logs.
 type LogRecord struct {
+  // The time request was received.
   T time.Time
+  // The request snapshot
   R Snapshot
+  // The capture of the response
   W Capture
+  // Time spent processing the request
   Duration time.Duration
+  // Additional information added with the Writer method.
   Extra string
 }
 
+// Logger represents an access log format.
 type Logger interface {
+  // NewSnapshot creates a new snapshot of a request.
   NewSnapshot(r *http.Request) Snapshot
+  // NewCapture creates a new capture for capturing a response. w is the
+  // original ResponseWriter.
   NewCapture(w http.ResponseWriter) Capture
+  // Log writes the log record.
   Log(w io.Writer, record *LogRecord)
 }
   
@@ -49,10 +61,10 @@ type Logger interface {
 type Options struct {
   // Where to write the web logs. nil means write to stderr,
   Writer io.Writer
-  // How to write the web logs. nil means the following:
-  // time including milliseconds; remote address; method; url; status
+  // How to write the web logs. nil means use SimpleLogger.
   Logger Logger
-  // How to get current time.
+  // How to get current time. nil means use time.Now(). This field is used
+  // for testing purposes.
   Now func() time.Time
 }
 
@@ -77,8 +89,9 @@ func (o *Options) now() func() time.Time {
   return o.Now
 }
 
-// Handler wraps a handler creating access logs. Returned handler must be
-// wrapped by context.ClearHandler.
+// Handler wraps a handler creating access logs. Access logs are written to
+// stderr using SimpleLogger. Returned handler must be wrapped by
+// context.ClearHandler.
 func Handler(handler http.Handler) http.Handler {
   return HandlerWithOptions(handler, nil)
 }
@@ -105,7 +118,7 @@ func HandlerWithOptions(
 func Writer(r *http.Request) io.Writer {
   value := context.Get(r, kBufferKey)
   if value == nil {
-    return kNilWriter
+    return nilWriter{}
   }
   return value.(*bytes.Buffer)
 }
@@ -143,13 +156,20 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   h.handler.ServeHTTP(capture, r)
 }
 
+// SimpleSnapshot provides a basic snapshot of a request.
 type SimpleSnapshot struct {
+  // Copied from Request.RemoteAddr
   RemoteAddr string
+  // Copied from Request.Method
   Method string
+  // Copied from Request.Proto
   Proto string
+  // Copied from Request.URL
   URL *url.URL
 }
 
+// SimpleSnapshotFactory provides a NewSnapshot method that creates a
+// SimpleSnapshot. Implementations of Logger my choose to embed this struct.
 type SimpleSnapshotFactory struct {
 }
 
@@ -162,9 +182,13 @@ func (f SimpleSnapshotFactory) NewSnapshot(r *http.Request) Snapshot {
       URL: &urlSnapshot}
 }
 
+// SimpleCapture provides a capture of a response that includes the http
+// status code and the size of the response.
 type SimpleCapture struct {
   http.ResponseWriter
+  // The HTTP status code.
   Status int
+  // The size of the response in bytes.
   Size int
   statusSet bool
 }
@@ -192,6 +216,8 @@ func (c *SimpleCapture) maybeSetStatus(status int) {
   }
 }
 
+// SimpleCaptureFactory provides a NewCapture method that creates a
+// SimpleCapture. Implementations of Logger may choose to embed this struct.
 type SimpleCaptureFactory struct {
 }
 
@@ -199,6 +225,9 @@ func (f SimpleCaptureFactory) NewCapture(w http.ResponseWriter) Capture {
   return &SimpleCapture{ResponseWriter: w}
 }
 
+// SimpleLogger provides access logs with the following columns:
+// date, remote address, method, URI, status, time elapsed milliseconds,
+// followed by any additional information provided via the Writer method.
 type SimpleLogger struct {
   SimpleSnapshotFactory
   SimpleCaptureFactory
@@ -207,26 +236,17 @@ type SimpleLogger struct {
 func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
   s := log.R.(*SimpleSnapshot)
   c := log.W.(*SimpleCapture)
-  if log.Extra == "" {
-    fmt.Fprintf(w, "%s %s %s %s %d %d\n",
-        log.T.Format("01/02/2006 15:04:05.999999"),
-        s.RemoteAddr,
-        s.Method,
-        s.URL.RequestURI(),
-        c.Status,
-        log.Duration / time.Millisecond)
-  } else {
-    fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
-        log.T.Format("01/02/2006 15:04:05.999999"),
-        s.RemoteAddr,
-        s.Method,
-        s.URL,
-        c.Status,
-        log.Duration / time.Millisecond,
-        log.Extra)
-  }
+  fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
+      log.T.Format("01/02/2006 15:04:05.999999"),
+      s.RemoteAddr,
+      s.Method,
+      s.URL,
+      c.Status,
+      log.Duration / time.Millisecond,
+      log.Extra)
 }
 
+// ApacheCommonLogger provides access logs in apache common log format.
 type ApacheCommonLogger struct {
   SimpleSnapshotFactory
   SimpleCaptureFactory
@@ -246,6 +266,8 @@ func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
         c.Size)
 }
 
+// ApacheUser is a utility method for Logger implementations that converts
+// user info in a request to a string.
 func ApacheUser(user *url.Userinfo) string {
   result := "-"
   if user != nil {
