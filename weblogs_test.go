@@ -132,6 +132,9 @@ type handler struct {
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  // Misbehave by mutating request object to verify that this does not affect
+  // logs
+  r.URL.Path = "/HandlerMutatedRequest"
   if h.Status != 0 {
     w.WriteHeader(h.Status)
     fmt.Fprintf(w, "%s", h.Message)
