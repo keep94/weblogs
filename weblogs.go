@@ -34,6 +34,7 @@ type LogRecord struct {
   T time.Time
   R Snapshot
   W Capture
+  Duration time.Duration
   Extra string
 }
 
@@ -116,15 +117,23 @@ type logHandler struct {
 }
 
 func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-  now := h.now()
   snapshot :=  h.logger.NewSnapshot(r)
   capture := h.logger.NewCapture(w)
   additional := &bytes.Buffer{}
   context.Set(r, kBufferKey, additional)
+  startTime := h.now()
   defer func() {
+    endTime := h.now()
     err := recover()
     maybeSend500(capture)
-    h.logger.Log(h.w, &LogRecord{T: now, R: snapshot, W: capture, Extra: additional.String()})
+    h.logger.Log(
+        h.w,
+        &LogRecord{
+            T: startTime,
+            R: snapshot,
+            W: capture,
+            Duration: endTime.Sub(startTime),
+            Extra: additional.String()})
     if err != nil {
       fmt.Fprintf(h.w, "Panic: %v\n", err)
       h.w.Write(debug.Stack())
@@ -198,21 +207,27 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
   s := log.R.(*SimpleSnapshot)
   c := log.W.(*SimpleCapture)
   if log.Extra == "" {
-    fmt.Fprintf(w, "%s %s %s %s %d\n",
-        log.T.Format("01/02/2006 15:04:05.999999"),
-        s.RemoteAddr,
-        s.Method,
-        s.URL,
-        c.Status)
-  } else {
-    fmt.Fprintf(w, "%s %s %s %s %d%s\n",
+    fmt.Fprintf(w, "%s %s %s %s %d %d\n",
         log.T.Format("01/02/2006 15:04:05.999999"),
         s.RemoteAddr,
         s.Method,
         s.URL,
         c.Status,
+        log.Duration / time.Millisecond)
+  } else {
+    fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
+        log.T.Format("01/02/2006 15:04:05.999999"),
+        s.RemoteAddr,
+        s.Method,
+        s.URL,
+        c.Status,
+        log.Duration / time.Millisecond,
         log.Extra)
   }
+}
+
+type ApacheCommonLogger struct {
+  SimpleLogger
 }
 
 func maybeSend500(c Capture) {
