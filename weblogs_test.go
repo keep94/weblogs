@@ -24,9 +24,8 @@ func TestNormalLogs(t *testing.T) {
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
-  actual := buf.String()
   expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 321 387\n"
-  verifyLogs(t, expected, actual)
+  verifyLogs(t, expected, buf.String())
 }
 
 func TestCommonLogs(t *testing.T) {
@@ -43,11 +42,42 @@ func TestCommonLogs(t *testing.T) {
   handler.ServeHTTP(
       kNilResponseWriter,
       request)
-  actual := buf.String()
   expected := "192.168.5.1 - fred [23/Mar/2013:13:14:15 +0000] \"GET /foo/bar?query=tall HTTP/1.0\" 321 7\n"
-  verifyLogs(t, expected, actual)
+  verifyLogs(t, expected, buf.String())
 }
 
+func TestCommonLogsUser(t *testing.T) {
+  u, _ := url.Parse("/pickle.gif")
+  snapshot := &weblogs.SimpleSnapshot{
+      Method: "POST",
+      Proto: "HTTP/1.0",
+      URL: u,
+      RemoteAddr: "10.5.10.20:3456"}
+  logRecord := &weblogs.LogRecord{
+      T: kTime, R: snapshot, W: &weblogs.SimpleCapture{}}
+  logger := weblogs.ApacheCommonLogger{}
+
+  // Missing user
+  buf := &bytes.Buffer{}
+  snapshot.URL.User = nil
+  logger.Log(buf, logRecord)
+  expected := "10.5.10.20 - - [23/Mar/2013:13:14:15 +0000] \"POST /pickle.gif HTTP/1.0\" 0 0\n"
+  verifyLogs(t, expected, buf.String())
+
+  // Empty user
+  buf = &bytes.Buffer{}
+  snapshot.URL.User = url.User("")
+  logger.Log(buf, logRecord)
+  expected = "10.5.10.20 - - [23/Mar/2013:13:14:15 +0000] \"POST /pickle.gif HTTP/1.0\" 0 0\n"
+  verifyLogs(t, expected, buf.String())
+
+  // Regular user
+  buf = &bytes.Buffer{}
+  snapshot.URL.User = url.User("abc")
+  logger.Log(buf, logRecord)
+  expected = "10.5.10.20 - abc [23/Mar/2013:13:14:15 +0000] \"POST /pickle.gif HTTP/1.0\" 0 0\n"
+  verifyLogs(t, expected, buf.String())
+}
 
 func TestAppendedLogs(t *testing.T) {
   buf := &bytes.Buffer{}
@@ -58,9 +88,8 @@ func TestAppendedLogs(t *testing.T) {
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
-  actual := buf.String()
   expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 321 0 behere\n"
-  verifyLogs(t, expected, actual)
+  verifyLogs(t, expected, buf.String())
 }
 
 func TestSend500OnNoOutput(t *testing.T) {
@@ -73,9 +102,8 @@ func TestSend500OnNoOutput(t *testing.T) {
   handler.ServeHTTP(
       w,
       newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
-  actual := buf.String()
   expected := "03/23/2013 13:14:15.123456 192.168.5.1 GET /foo/bar?query=tall 500 23 behere\n"
-  verifyLogs(t, expected, actual)
+  verifyLogs(t, expected, buf.String())
   if w.Status != 500 {
     t.Errorf("Expected 500 error to be sent, but %d was sent.", w.Status)
   }
@@ -105,7 +133,7 @@ func (c *clock) Now() func() time.Time {
 
 func verifyLogs(t *testing.T, expected, actual string) {
   if expected != actual {
-    t.Errorf("Want: %s, Got:  %s", expected, actual)
+    t.Errorf("Want: %s, Got: %s", expected, actual)
   }
 }
 

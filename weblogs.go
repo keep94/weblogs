@@ -212,7 +212,7 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
         log.T.Format("01/02/2006 15:04:05.999999"),
         s.RemoteAddr,
         s.Method,
-        s.URL,
+        s.URL.RequestURI(),
         c.Status,
         log.Duration / time.Millisecond)
   } else {
