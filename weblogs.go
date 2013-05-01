@@ -235,16 +235,9 @@ type ApacheCommonLogger struct {
 func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
   s := log.R.(*SimpleSnapshot)
   c := log.W.(*SimpleCapture)
-  user := "-"
-  if s.URL.User != nil {
-    username := s.URL.User.Username()
-    if username != "" {
-      user = username
-    }
-  }
   fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d\n",
         strings.Split(s.RemoteAddr, ":")[0],
-        user,
+        ApacheUser(s.URL.User),
         log.T.Format("02/Jan/2006:15:04:05 -0700"),
         s.Method,
         s.URL.RequestURI(),
@@ -253,6 +246,15 @@ func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
         c.Size)
 }
 
+func ApacheUser(user *url.Userinfo) string {
+  result := "-"
+  if user != nil {
+    if name := user.Username(); name != "" {
+      result = name
+    }
+  }
+  return result
+}
 
 func maybeSend500(c Capture) {
   if !c.HasStatus() {

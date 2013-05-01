@@ -46,37 +46,10 @@ func TestCommonLogs(t *testing.T) {
   verifyLogs(t, expected, buf.String())
 }
 
-func TestCommonLogsUser(t *testing.T) {
-  u, _ := url.Parse("/pickle.gif")
-  snapshot := &weblogs.SimpleSnapshot{
-      Method: "POST",
-      Proto: "HTTP/1.0",
-      URL: u,
-      RemoteAddr: "10.5.10.20:3456"}
-  logRecord := &weblogs.LogRecord{
-      T: kTime, R: snapshot, W: &weblogs.SimpleCapture{}}
-  logger := weblogs.ApacheCommonLogger{}
-
-  // Missing user
-  buf := &bytes.Buffer{}
-  snapshot.URL.User = nil
-  logger.Log(buf, logRecord)
-  expected := "10.5.10.20 - - [23/Mar/2013:13:14:15 +0000] \"POST /pickle.gif HTTP/1.0\" 0 0\n"
-  verifyLogs(t, expected, buf.String())
-
-  // Empty user
-  buf = &bytes.Buffer{}
-  snapshot.URL.User = url.User("")
-  logger.Log(buf, logRecord)
-  expected = "10.5.10.20 - - [23/Mar/2013:13:14:15 +0000] \"POST /pickle.gif HTTP/1.0\" 0 0\n"
-  verifyLogs(t, expected, buf.String())
-
-  // Regular user
-  buf = &bytes.Buffer{}
-  snapshot.URL.User = url.User("abc")
-  logger.Log(buf, logRecord)
-  expected = "10.5.10.20 - abc [23/Mar/2013:13:14:15 +0000] \"POST /pickle.gif HTTP/1.0\" 0 0\n"
-  verifyLogs(t, expected, buf.String())
+func TestApacheUser(t *testing.T) {
+  verifyString(t, "-", weblogs.ApacheUser(nil))
+  verifyString(t, "-", weblogs.ApacheUser(url.User("")))
+  verifyString(t, "bill", weblogs.ApacheUser(url.User("bill")))
 }
 
 func TestAppendedLogs(t *testing.T) {
@@ -132,6 +105,10 @@ func (c *clock) Now() func() time.Time {
 }
 
 func verifyLogs(t *testing.T, expected, actual string) {
+  verifyString(t, expected, actual)
+}
+
+func verifyString(t *testing.T, expected, actual string) {
   if expected != actual {
     t.Errorf("Want: %s, Got: %s", expected, actual)
   }
