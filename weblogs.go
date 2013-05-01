@@ -168,14 +168,9 @@ type SimpleSnapshot struct {
   URL *url.URL
 }
 
-// SimpleSnapshotFactory provides a NewSnapshot method that creates a
-// SimpleSnapshot. Implementations of Logger my choose to embed this struct.
-type SimpleSnapshotFactory struct {
-}
-
-func (f SimpleSnapshotFactory) NewSnapshot(r *http.Request) Snapshot {
+func NewSimpleSnapshot(r *http.Request) SimpleSnapshot {
   urlSnapshot := *r.URL
-  return &SimpleSnapshot{
+  return SimpleSnapshot{
       RemoteAddr: r.RemoteAddr,
       Method: r.Method,
       Proto: r.Proto,
@@ -185,10 +180,11 @@ func (f SimpleSnapshotFactory) NewSnapshot(r *http.Request) Snapshot {
 // SimpleCapture provides a capture of a response that includes the http
 // status code and the size of the response.
 type SimpleCapture struct {
+  // The underlying ResponseWriter
   http.ResponseWriter
-  // The HTTP status code.
+  // The HTTP status code shows up here.
   Status int
-  // The size of the response in bytes.
+  // The size of the response in bytes shows up here.
   Size int
   statusSet bool
 }
@@ -216,21 +212,19 @@ func (c *SimpleCapture) maybeSetStatus(status int) {
   }
 }
 
-// SimpleCaptureFactory provides a NewCapture method that creates a
-// SimpleCapture. Implementations of Logger may choose to embed this struct.
-type SimpleCaptureFactory struct {
-}
-
-func (f SimpleCaptureFactory) NewCapture(w http.ResponseWriter) Capture {
-  return &SimpleCapture{ResponseWriter: w}
-}
-
 // SimpleLogger provides access logs with the following columns:
 // date, remote address, method, URI, status, time elapsed milliseconds,
 // followed by any additional information provided via the Writer method.
 type SimpleLogger struct {
-  SimpleSnapshotFactory
-  SimpleCaptureFactory
+}
+
+func (l SimpleLogger) NewSnapshot(r *http.Request) Snapshot {
+  snapshot := NewSimpleSnapshot(r)
+  return &snapshot
+}
+
+func (l SimpleLogger) NewCapture(w http.ResponseWriter) Capture {
+  return &SimpleCapture{ResponseWriter: w}
 }
 
 func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
@@ -248,8 +242,15 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
 
 // ApacheCommonLogger provides access logs in apache common log format.
 type ApacheCommonLogger struct {
-  SimpleSnapshotFactory
-  SimpleCaptureFactory
+}
+
+func (l ApacheCommonLogger) NewSnapshot(r *http.Request) Snapshot {
+  snapshot := NewSimpleSnapshot(r)
+  return &snapshot
+}
+
+func (l ApacheCommonLogger) NewCapture(w http.ResponseWriter) Capture {
+  return &SimpleCapture{ResponseWriter: w}
 }
 
 func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
