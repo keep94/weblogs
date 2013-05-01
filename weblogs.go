@@ -46,7 +46,8 @@ type LogRecord struct {
   Extra string
 }
 
-// Logger represents an access log format.
+// Logger represents an access log format. Clients are free to provide their
+// own implementations.
 type Logger interface {
   // NewSnapshot creates a new snapshot of a request.
   NewSnapshot(r *http.Request) Snapshot
@@ -156,8 +157,8 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   h.handler.ServeHTTP(capture, r)
 }
 
-// ApacheCommonSnapshot provides a basic snapshot of a request for apache
-// common access logs.
+// ApacheCommonSnapshot provides a request snapshot for apache common
+// access logs.
 type ApacheCommonSnapshot struct {
   // Copied from Request.RemoteAddr
   RemoteAddr string
@@ -178,6 +179,8 @@ func NewApacheCommonSnapshot(r *http.Request) ApacheCommonSnapshot {
       URL: &urlSnapshot}
 }
 
+// ApacheCombinedSnapshot provides a request snapshot for apache combined
+// access logs.
 type ApacheCombinedSnapshot struct {
   ApacheCommonSnapshot
   Referer string
@@ -281,6 +284,7 @@ func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
         c.Size)
 }
 
+// ApacheCombinedLogger provides access logs in apache combined log format.
 type ApacheCombinedLogger struct {
 }
 
@@ -310,8 +314,8 @@ func (l ApacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
 }
 
 
-// ApacheUser is a utility method for Logger implementations that converts
-// user info in a request to a string.
+// ApacheUser is a utility method for Logger implementations that formats
+// user info in a request for apache logging.
 func ApacheUser(user *url.Userinfo) string {
   result := "-"
   if user != nil {
