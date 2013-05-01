@@ -156,8 +156,9 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   h.handler.ServeHTTP(capture, r)
 }
 
-// SimpleSnapshot provides a basic snapshot of a request.
-type SimpleSnapshot struct {
+// ApacheCommonSnapshot provides a basic snapshot of a request for apache
+// common access logs.
+type ApacheCommonSnapshot struct {
   // Copied from Request.RemoteAddr
   RemoteAddr string
   // Copied from Request.Method
@@ -168,9 +169,9 @@ type SimpleSnapshot struct {
   URL *url.URL
 }
 
-func NewSimpleSnapshot(r *http.Request) SimpleSnapshot {
+func NewApacheCommonSnapshot(r *http.Request) ApacheCommonSnapshot {
   urlSnapshot := *r.URL
-  return SimpleSnapshot{
+  return ApacheCommonSnapshot{
       RemoteAddr: r.RemoteAddr,
       Method: r.Method,
       Proto: r.Proto,
@@ -178,14 +179,14 @@ func NewSimpleSnapshot(r *http.Request) SimpleSnapshot {
 }
 
 type ApacheCombinedSnapshot struct {
-  SimpleSnapshot
+  ApacheCommonSnapshot
   Referer string
   UserAgent string
 }
 
 func NewApacheCombinedSnapshot(r *http.Request) ApacheCombinedSnapshot {
   return ApacheCombinedSnapshot{
-      SimpleSnapshot: NewSimpleSnapshot(r),
+      ApacheCommonSnapshot: NewApacheCommonSnapshot(r),
       Referer: r.Referer(),
       UserAgent: r.UserAgent()}
 }
@@ -232,7 +233,7 @@ type SimpleLogger struct {
 }
 
 func (l SimpleLogger) NewSnapshot(r *http.Request) Snapshot {
-  snapshot := NewSimpleSnapshot(r)
+  snapshot := NewApacheCommonSnapshot(r)
   return &snapshot
 }
 
@@ -241,7 +242,7 @@ func (l SimpleLogger) NewCapture(w http.ResponseWriter) Capture {
 }
 
 func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
-  s := log.R.(*SimpleSnapshot)
+  s := log.R.(*ApacheCommonSnapshot)
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
       log.T.Format("01/02/2006 15:04:05.999999"),
@@ -258,7 +259,7 @@ type ApacheCommonLogger struct {
 }
 
 func (l ApacheCommonLogger) NewSnapshot(r *http.Request) Snapshot {
-  snapshot := NewSimpleSnapshot(r)
+  snapshot := NewApacheCommonSnapshot(r)
   return &snapshot
 }
 
@@ -267,7 +268,7 @@ func (l ApacheCommonLogger) NewCapture(w http.ResponseWriter) Capture {
 }
 
 func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
-  s := log.R.(*SimpleSnapshot)
+  s := log.R.(*ApacheCommonSnapshot)
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d\n",
         strings.Split(s.RemoteAddr, ":")[0],
