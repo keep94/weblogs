@@ -254,7 +254,7 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
       log.T.Format("01/02/2006 15:04:05"),
-      strings.Split(s.RemoteAddr, ":")[0],
+      StripPort(s.RemoteAddr),
       s.Method,
       s.URL,
       c.Status,
@@ -279,7 +279,7 @@ func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
   s := log.R.(*ApacheCommonSnapshot)
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d\n",
-        strings.Split(s.RemoteAddr, ":")[0],
+        StripPort(s.RemoteAddr),
         ApacheUser(s.URL.User),
         log.T.Format("02/Jan/2006:15:04:05 -0700"),
         s.Method,
@@ -306,7 +306,7 @@ func (l ApacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
   s := log.R.(*ApacheCombinedSnapshot)
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d \"%s\" \"%s\"\n",
-        strings.Split(s.RemoteAddr, ":")[0],
+        StripPort(s.RemoteAddr),
         ApacheUser(s.URL.User),
         log.T.Format("02/Jan/2006:15:04:05 -0700"),
         s.Method,
@@ -329,6 +329,14 @@ func ApacheUser(user *url.Userinfo) string {
     }
   }
   return result
+}
+
+// StripPort strips the port number off of a remote address
+func StripPort(remoteAddr string) string {
+  if index := strings.LastIndex(remoteAddr, ":"); index != -1 {
+    return remoteAddr[:index]
+  }
+  return remoteAddr
 }
 
 func maybeSend500(c Capture) {

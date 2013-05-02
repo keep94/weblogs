@@ -28,7 +28,7 @@ func TestNormalLogs(t *testing.T) {
       &weblogs.Options{Writer: buf, Now: clock.Now()})
   handler.ServeHTTP(
       kNilResponseWriter,
-      newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
+      newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall"))
   expected := "03/23/2013 13:14:15 192.168.5.1 GET /foo/bar?query=tall 321 387\n"
   verifyLogs(t, expected, buf.String())
 }
@@ -42,7 +42,7 @@ func TestCommonLogs(t *testing.T) {
           Writer: buf,
           Logger: weblogs.ApacheCommonLogger{},
           Now: clock.Now()})
-  request := newRequest("192.168.5.1", "GET", "/foo/bar?query=tall")
+  request := newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall")
   request.URL.User = url.User("fred")
   handler.ServeHTTP(
       kNilResponseWriter,
@@ -60,7 +60,7 @@ func TestCombinedLogs(t *testing.T) {
           Writer: buf,
           Logger: weblogs.ApacheCombinedLogger{},
           Now: clock.Now()})
-  request := newRequest("192.168.5.1", "GET", "/foo/bar?query=tall")
+  request := newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall")
   request.URL.User = url.User("fred")
   request.Header = make(http.Header)
   request.Header.Set("Referer", "referer")
@@ -100,7 +100,7 @@ func TestSend500OnNoOutput(t *testing.T) {
   w := &spyResponseWriter{}
   handler.ServeHTTP(
       w,
-      newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
+      newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall"))
   expected := "03/23/2013 13:14:15 192.168.5.1 GET /foo/bar?query=tall 500 23 behere\n"
   verifyLogs(t, expected, buf.String())
   if w.Status != 500 {
@@ -113,7 +113,7 @@ func TestUnwrappedCallToWriter(t *testing.T) {
   handler := &handler{LogExtra: "behere"}
   handler.ServeHTTP(
       kNilResponseWriter,
-      newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
+      newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall"))
 }
 
 type clock struct {
