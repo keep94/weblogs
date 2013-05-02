@@ -11,6 +11,11 @@ Easily add web access logs to your go http server.
 
 	go get github.com/keep94/weblogs
 
+## Features
+
+If server panics before sending a response, weblogs automatically sends a
+500 error to client and logs the panic.
+
 ## Online Documentation
 
 Online documentation available [here](http://go.pkgdoc.org/github.com/keep94/weblogs).
