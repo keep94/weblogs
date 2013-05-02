@@ -254,7 +254,7 @@ func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
   c := log.W.(*SimpleCapture)
   fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
       log.T.Format("01/02/2006 15:04:05"),
-      s.RemoteAddr,
+      strings.Split(s.RemoteAddr, ":")[0],
       s.Method,
       s.URL,
       c.Status,
