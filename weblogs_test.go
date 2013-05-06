@@ -40,7 +40,7 @@ func TestCommonLogs(t *testing.T) {
       &handler{Status: 321, Message: "1234567"},
       &weblogs.Options{
           Writer: buf,
-          Logger: weblogs.ApacheCommonLogger{},
+          Logger: weblogs.ApacheCommonLogger(),
           Now: clock.Now()})
   request := newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall")
   request.URL.User = url.User("fred")
@@ -58,7 +58,7 @@ func TestCombinedLogs(t *testing.T) {
       &handler{Status: 321, Message: "1234567"},
       &weblogs.Options{
           Writer: buf,
-          Logger: weblogs.ApacheCombinedLogger{},
+          Logger: weblogs.ApacheCombinedLogger(),
           Now: clock.Now()})
   request := newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall")
   request.URL.User = url.User("fred")
@@ -70,12 +70,6 @@ func TestCombinedLogs(t *testing.T) {
       request)
   expected := "192.168.5.1 - fred [23/Mar/2013:13:14:15 +0000] \"GET /foo/bar?query=tall HTTP/1.0\" 321 7 \"referer\" \"useragent\"\n"
   verifyLogs(t, expected, buf.String())
-}
-
-func TestApacheUser(t *testing.T) {
-  verifyString(t, "-", weblogs.ApacheUser(nil))
-  verifyString(t, "-", weblogs.ApacheUser(url.User("")))
-  verifyString(t, "bill", weblogs.ApacheUser(url.User("bill")))
 }
 
 func TestAppendedLogs(t *testing.T) {

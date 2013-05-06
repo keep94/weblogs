@@ -10,12 +10,11 @@ import (
   "bytes"
   "fmt"
   "github.com/gorilla/context"
+  "github.com/keep94/weblogs/loggers"
   "io"
   "net/http"
-  "net/url"
   "os"
   "runtime/debug"
-  "strings"
   "time"
 )
 
@@ -67,7 +66,7 @@ type Logger interface {
 type Options struct {
   // Where to write the web logs. nil means write to stderr,
   Writer io.Writer
-  // How to write the web logs. nil means use SimpleLogger.
+  // How to write the web logs. nil means SimpleLogger().
   Logger Logger
   // How to get current time. nil means use time.Now(). This field is used
   // for testing purposes.
@@ -83,7 +82,7 @@ func (o *Options) writer() io.Writer {
 
 func (o *Options) logger() Logger {
   if o.Logger == nil {
-    return SimpleLogger{}
+    return simpleLogger{}
   }
   return o.Logger
 }
@@ -96,7 +95,7 @@ func (o *Options) now() func() time.Time {
 }
 
 // Handler wraps a handler creating access logs. Access logs are written to
-// stderr using SimpleLogger. Returned handler must be wrapped by
+// stderr using SimpleLogger(). Returned handler must be wrapped by
 // context.ClearHandler.
 func Handler(handler http.Handler) http.Handler {
   return HandlerWithOptions(handler, nil)
@@ -162,181 +161,88 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   h.handler.ServeHTTP(capture, r)
 }
 
-// ApacheCommonSnapshot provides a request snapshot for apache common
-// access logs.
-type ApacheCommonSnapshot struct {
-  // Copied from Request.RemoteAddr
-  RemoteAddr string
-  // Copied from Request.Method
-  Method string
-  // Copied from Request.Proto
-  Proto string
-  // Copied from Request.URL
-  URL *url.URL
-}
-
-func NewApacheCommonSnapshot(r *http.Request) ApacheCommonSnapshot {
-  urlSnapshot := *r.URL
-  return ApacheCommonSnapshot{
-      RemoteAddr: r.RemoteAddr,
-      Method: r.Method,
-      Proto: r.Proto,
-      URL: &urlSnapshot}
-}
-
-// ApacheCombinedSnapshot provides a request snapshot for apache combined
-// access logs.
-type ApacheCombinedSnapshot struct {
-  ApacheCommonSnapshot
-  Referer string
-  UserAgent string
-}
-
-func NewApacheCombinedSnapshot(r *http.Request) ApacheCombinedSnapshot {
-  return ApacheCombinedSnapshot{
-      ApacheCommonSnapshot: NewApacheCommonSnapshot(r),
-      Referer: r.Referer(),
-      UserAgent: r.UserAgent()}
-}
-
-// SimpleCapture provides a capture of a response that includes the http
-// status code and the size of the response.
-type SimpleCapture struct {
-  // The underlying ResponseWriter
-  http.ResponseWriter
-  // The HTTP status code shows up here.
-  Status int
-  // The size of the response in bytes shows up here.
-  Size int
-  statusSet bool
-}
-
-func (c *SimpleCapture) Write(b []byte) (int, error) {
-  result, err := c.ResponseWriter.Write(b)
-  c.Size += result
-  c.maybeSetStatus(http.StatusOK)
-  return result, err
-}
-
-func (c *SimpleCapture) WriteHeader(status int) {
-  c.ResponseWriter.WriteHeader(status)
-  c.maybeSetStatus(status)
-}
-
-func (c *SimpleCapture) HasStatus() bool {
-  return c.statusSet
-}
-
-func (c *SimpleCapture) maybeSetStatus(status int) {
-  if !c.statusSet {
-    c.Status = status
-    c.statusSet = true
-  }
-}
-
 // SimpleLogger provides access logs with the following columns:
 // date, remote address, method, URI, status, time elapsed milliseconds,
 // followed by any additional information provided via the Writer method.
-type SimpleLogger struct {
+func SimpleLogger() Logger {
+  return simpleLogger{}
 }
 
-func (l SimpleLogger) NewSnapshot(r *http.Request) Snapshot {
-  snapshot := NewApacheCommonSnapshot(r)
+// ApacheCommonLogger provides access logs in apache common log format.
+func ApacheCommonLogger() Logger {
+  return apacheCommonLogger{}
+}
+
+// ApacheCombinedLogger provides access logs in apache combined log format.
+func ApacheCombinedLogger() Logger {
+  return apacheCombinedLogger{}
+}
+
+type loggerBase struct {
+}
+
+func (l loggerBase) NewSnapshot(r *http.Request) Snapshot {
+  snapshot := loggers.NewSnapshot(r)
   return &snapshot
 }
 
-func (l SimpleLogger) NewCapture(w http.ResponseWriter) Capture {
-  return &SimpleCapture{ResponseWriter: w}
+func (l loggerBase) NewCapture(w http.ResponseWriter) Capture {
+  return &loggers.Capture{ResponseWriter: w}
 }
 
-func (l SimpleLogger) Log(w io.Writer, log *LogRecord) {
-  s := log.R.(*ApacheCommonSnapshot)
-  c := log.W.(*SimpleCapture)
+type simpleLogger struct {
+  loggerBase
+}
+
+func (l simpleLogger) Log(w io.Writer, log *LogRecord) {
+  s := log.R.(*loggers.Snapshot)
+  c := log.W.(*loggers.Capture)
   fmt.Fprintf(w, "%s %s %s %s %d %d%s\n",
       log.T.Format("01/02/2006 15:04:05"),
-      StripPort(s.RemoteAddr),
+      loggers.StripPort(s.RemoteAddr),
       s.Method,
       s.URL,
-      c.Status,
+      c.Status(),
       log.Duration / time.Millisecond,
       log.Extra)
 }
 
-// ApacheCommonLogger provides access logs in apache common log format.
-type ApacheCommonLogger struct {
+type apacheCommonLogger struct {
+  loggerBase
 }
 
-func (l ApacheCommonLogger) NewSnapshot(r *http.Request) Snapshot {
-  snapshot := NewApacheCommonSnapshot(r)
-  return &snapshot
-}
-
-func (l ApacheCommonLogger) NewCapture(w http.ResponseWriter) Capture {
-  return &SimpleCapture{ResponseWriter: w}
-}
-
-func (l ApacheCommonLogger) Log(w io.Writer, log *LogRecord) {
-  s := log.R.(*ApacheCommonSnapshot)
-  c := log.W.(*SimpleCapture)
+func (l apacheCommonLogger) Log(w io.Writer, log *LogRecord) {
+  s := log.R.(*loggers.Snapshot)
+  c := log.W.(*loggers.Capture)
   fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d\n",
-        StripPort(s.RemoteAddr),
-        ApacheUser(s.URL.User),
+        loggers.StripPort(s.RemoteAddr),
+        loggers.ApacheUser(s.URL.User),
         log.T.Format("02/Jan/2006:15:04:05 -0700"),
         s.Method,
         s.URL.RequestURI(),
         s.Proto,
-        c.Status,
-        c.Size)
+        c.Status(),
+        c.Size())
 }
 
-// ApacheCombinedLogger provides access logs in apache combined log format.
-type ApacheCombinedLogger struct {
+type apacheCombinedLogger struct {
+  loggerBase
 }
 
-func (l ApacheCombinedLogger) NewSnapshot(r *http.Request) Snapshot {
-  snapshot := NewApacheCombinedSnapshot(r)
-  return &snapshot
-}
-
-func (l ApacheCombinedLogger) NewCapture(w http.ResponseWriter) Capture {
-  return &SimpleCapture{ResponseWriter: w}
-}
-
-func (l ApacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
-  s := log.R.(*ApacheCombinedSnapshot)
-  c := log.W.(*SimpleCapture)
+func (l apacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
+  s := log.R.(*loggers.Snapshot)
+  c := log.W.(*loggers.Capture)
   fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d \"%s\" \"%s\"\n",
-        StripPort(s.RemoteAddr),
-        ApacheUser(s.URL.User),
+        loggers.StripPort(s.RemoteAddr),
+        loggers.ApacheUser(s.URL.User),
         log.T.Format("02/Jan/2006:15:04:05 -0700"),
         s.Method,
         s.URL.RequestURI(),
         s.Proto,
-        c.Status,
-        c.Size,
+        c.Status(),
+        c.Size(),
         s.Referer,
         s.UserAgent)
-}
-
-
-// ApacheUser is a utility method for Logger implementations that formats
-// user info in a request for apache logging.
-func ApacheUser(user *url.Userinfo) string {
-  result := "-"
-  if user != nil {
-    if name := user.Username(); name != "" {
-      result = name
-    }
-  }
-  return result
-}
-
-// StripPort strips the port number off of a remote address
-func StripPort(remoteAddr string) string {
-  if index := strings.LastIndex(remoteAddr, ":"); index != -1 {
-    return remoteAddr[:index]
-  }
-  return remoteAddr
 }
 
 func maybeSend500(c Capture) {
