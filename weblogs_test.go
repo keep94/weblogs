@@ -9,6 +9,8 @@ import (
   "bytes"
   "fmt"
   "github.com/keep94/weblogs"
+  "github.com/keep94/weblogs/loggers"
+  "io"
   "net/http"
   "net/url"
   "testing"
@@ -85,6 +87,18 @@ func TestAppendedLogs(t *testing.T) {
   verifyLogs(t, expected, buf.String())
 }
 
+func TestSetValues(t *testing.T) {
+  buf := &bytes.Buffer{}
+  handler := weblogs.HandlerWithOptions(
+      &handler{Field1: "one", Field2: "two"},
+      &weblogs.Options{Writer: buf, Logger: setLogger{}})
+  handler.ServeHTTP(
+      kNilResponseWriter,
+      newRequest("192.168.5.1", "GET", "/foo/bar?query=tall"))
+  expected := "field1=one field2=two\n"
+  verifyLogs(t, expected, buf.String())
+}
+
 func TestSend500OnNoOutput(t *testing.T) {
   buf := &bytes.Buffer{}
   clock := &clock{Time: kTime}
@@ -108,6 +122,13 @@ func TestUnwrappedCallToWriter(t *testing.T) {
   handler.ServeHTTP(
       kNilResponseWriter,
       newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall"))
+}
+
+func TestUnwrappedCallToValues(t *testing.T) {
+  if weblogs.Values(newRequest(
+      "192.168.5.1:3333", "GET", "/foo/bar?query=tall")) != nil {
+    t.Error("Expected unwrapped weblogs.Values call to return nil")
+  }
 }
 
 type clock struct {
@@ -147,6 +168,8 @@ type handler struct {
   Status int
   Message string
   LogExtra string
+  Field1 string
+  Field2 string
   Clock *clock
   ElapsedMillis int
 }
@@ -161,6 +184,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   }
   if h.LogExtra != "" {
     fmt.Fprintf(weblogs.Writer(r), " %s", h.LogExtra)
+  }
+  values := weblogs.Values(r)
+  if values != nil {
+    if h.Field1 != "" {
+      values["field1"] = h.Field1
+    }
+    if h.Field2 != "" {
+      values["field2"] = h.Field2
+    }
   }
   if h.Clock != nil {
     h.Clock.AddMillis(h.ElapsedMillis)
@@ -189,4 +221,22 @@ type spyResponseWriter struct {
 func (w *spyResponseWriter) WriteHeader(status int) {
   w.Status = status
 }
-  
+
+type setLogger struct {
+}
+
+func (s setLogger) NewSnapshot(r *http.Request) weblogs.Snapshot {
+  return nil
+}
+
+func (s setLogger) NewCapture(w http.ResponseWriter) weblogs.Capture {
+  return &loggers.Capture{ResponseWriter: w}
+}
+
+func (s setLogger) Log(w io.Writer, record *weblogs.LogRecord) {
+  fmt.Fprintf(
+      w,
+      "field1=%v field2=%v\n",
+      record.Values["field1"],
+      record.Values["field2"])
+}

@@ -22,6 +22,7 @@ type contextKeyType int
 
 const (
   kBufferKey contextKeyType = iota
+  kValuesKey
 )
 
 // Snapshot represents a snapshot of an HTTP request.
@@ -48,6 +49,8 @@ type LogRecord struct {
   Duration time.Duration
   // Additional information added with the Writer method.
   Extra string
+  // Key-value pairs to be logged.
+  Values map[interface{}]interface{}
 }
 
 // Logger represents an access log format. Clients are free to provide their
@@ -128,6 +131,17 @@ func Writer(r *http.Request) io.Writer {
   return value.(*bytes.Buffer)
 }
 
+// Values returns the current key-value pairs to be logged.
+// If the handler calling this is not wrapped by the Handler() method,
+// then this method returns nil.
+func Values(r *http.Request) map[interface{}]interface{} {
+  instance := context.Get(r, kValuesKey)
+  if instance == nil {
+    return nil
+  }
+  return instance.(map[interface{}]interface{})
+}
+
 type logHandler struct {
   handler http.Handler
   w io.Writer
@@ -139,7 +153,9 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   snapshot :=  h.logger.NewSnapshot(r)
   capture := h.logger.NewCapture(w)
   additional := &bytes.Buffer{}
+  values := make(map[interface{}]interface{})
   context.Set(r, kBufferKey, additional)
+  context.Set(r, kValuesKey, values)
   startTime := h.now()
   defer func() {
     endTime := h.now()
@@ -152,7 +168,8 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             R: snapshot,
             W: capture,
             Duration: endTime.Sub(startTime),
-            Extra: additional.String()})
+            Extra: additional.String(),
+            Values: values})
     if err != nil {
       fmt.Fprintf(h.w, "Panic: %v\n", err)
       h.w.Write(debug.Stack())
