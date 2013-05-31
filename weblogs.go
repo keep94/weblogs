@@ -199,8 +199,7 @@ type loggerBase struct {
 }
 
 func (l loggerBase) NewSnapshot(r *http.Request) Snapshot {
-  snapshot := loggers.NewSnapshot(r)
-  return &snapshot
+  return loggers.NewSnapshot(r)
 }
 
 func (l loggerBase) NewCapture(w http.ResponseWriter) Capture {

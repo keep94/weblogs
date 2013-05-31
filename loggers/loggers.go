@@ -29,9 +29,9 @@ type Snapshot struct {
   UserAgent string
 }
 
-func NewSnapshot(r *http.Request) Snapshot {
+func NewSnapshot(r *http.Request) *Snapshot {
   urlSnapshot := *r.URL
-  return Snapshot{
+  return &Snapshot{
       RemoteAddr: r.RemoteAddr,
       Method: r.Method,
       Proto: r.Proto,
