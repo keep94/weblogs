@@ -13,6 +13,7 @@ import (
   "io"
   "net/http"
   "net/url"
+  "sync"
   "testing"
   "time"
 )
@@ -33,6 +34,26 @@ func TestNormalLogs(t *testing.T) {
       newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall"))
   expected := "03/23/2013 13:14:15 192.168.5.1 GET /foo/bar?query=tall 321 387\n"
   verifyLogs(t, expected, buf.String())
+}
+
+func TestRaces(t *testing.T) {
+  buf := &bytes.Buffer{}
+  clock := &clock{Time: kTime}
+  handler := weblogs.HandlerWithOptions(
+      &handler{Status: 200},
+      &weblogs.Options{
+          Writer: buf, Logger: verySimpleLogger{}, Now: clock.Now()})
+  var wg sync.WaitGroup
+  wg.Add(20)
+  for i := 0; i < 20; i++ {
+    go func() {
+      handler.ServeHTTP(
+          kNilResponseWriter,
+          newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall"))
+      wg.Done()
+    }()
+  }
+  wg.Wait()
 }
 
 func TestCommonLogs(t *testing.T) {
@@ -240,3 +261,22 @@ func (s setLogger) Log(w io.Writer, record *weblogs.LogRecord) {
       record.Values["field1"],
       record.Values["field2"])
 }
+
+type verySimpleLogger struct {
+}
+
+func (l verySimpleLogger) NewSnapshot(r *http.Request) weblogs.Snapshot {
+  return nil
+}
+
+func (l verySimpleLogger) NewCapture(
+    w http.ResponseWriter) weblogs.Capture {
+  return &loggers.Capture{ResponseWriter: w}
+}
+
+func (l verySimpleLogger) Log(w io.Writer, record *weblogs.LogRecord) {
+  w.Write([]byte{72,69,76,76,79})
+}
+
+
+

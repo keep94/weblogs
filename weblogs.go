@@ -15,6 +15,7 @@ import (
   "net/http"
   "os"
   "runtime/debug"
+  "sync"
   "time"
 )
 
@@ -143,6 +144,8 @@ func Values(r *http.Request) map[interface{}]interface{} {
 }
 
 type logHandler struct {
+  // mutex protects the w field.
+  mutex sync.Mutex
   handler http.Handler
   w io.Writer
   logger Logger
@@ -161,8 +164,7 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     endTime := h.now()
     err := recover()
     maybeSend500(capture)
-    h.logger.Log(
-        h.w,
+    h.writeLogRecord(
         &LogRecord{
             T: startTime,
             R: snapshot,
@@ -171,13 +173,26 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             Extra: additional.String(),
             Values: values})
     if err != nil {
-      fmt.Fprintf(h.w, "Panic: %v\n", err)
-      h.w.Write(debug.Stack())
+      h.writePanic(err, debug.Stack());
     }
   }()
   h.handler.ServeHTTP(capture, r)
 }
 
+func (h *logHandler) writeLogRecord(logRecord *LogRecord) {
+  h.mutex.Lock()
+  defer h.mutex.Unlock()
+  h.logger.Log(h.w, logRecord)
+}
+
+func (h *logHandler) writePanic(
+    panicError interface{}, debugStack []byte) {
+  h.mutex.Lock()
+  defer h.mutex.Unlock()
+  fmt.Fprintf(h.w, "Panic: %v\n", panicError)
+  h.w.Write(debugStack)
+}
+    
 // SimpleLogger provides access logs with the following columns:
 // date, remote address, method, URI, status, time elapsed milliseconds,
 // followed by any additional information provided via the Writer method.
