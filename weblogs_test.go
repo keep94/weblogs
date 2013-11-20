@@ -74,6 +74,24 @@ func TestCommonLogs(t *testing.T) {
   verifyLogs(t, expected, buf.String())
 }
 
+func TestLogStatus200(t *testing.T) {
+  buf := &bytes.Buffer{}
+  clock := &clock{Time: kTime}
+  handler := weblogs.HandlerWithOptions(
+      &handler{Message: "1234567"},
+      &weblogs.Options{
+          Writer: buf,
+          Logger: weblogs.ApacheCommonLogger(),
+          Now: clock.Now()})
+  request := newRequest("192.168.5.1:3333", "GET", "/foo/bar?query=tall")
+  request.URL.User = url.User("fred")
+  handler.ServeHTTP(
+      kNilResponseWriter,
+      request)
+  expected := "192.168.5.1 - fred [23/Mar/2013:13:14:15 +0000] \"GET /foo/bar?query=tall HTTP/1.0\" 200 7\n"
+  verifyLogs(t, expected, buf.String())
+}
+
 func TestCombinedLogs(t *testing.T) {
   buf := &bytes.Buffer{}
   clock := &clock{Time: kTime}
@@ -201,6 +219,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   r.URL.Path = "/HandlerMutatedRequest"
   if h.Status != 0 {
     w.WriteHeader(h.Status)
+  }
+  if h.Message != "" {
     fmt.Fprintf(w, "%s", h.Message)
   }
   if h.LogExtra != "" {
