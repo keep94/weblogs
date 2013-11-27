@@ -26,6 +26,10 @@ const (
   kValuesKey
 )
 
+var (
+  kNoOptions = &Options{}
+)
+
 // Snapshot represents a snapshot of an HTTP request.
 type Snapshot interface{}
 
@@ -111,7 +115,7 @@ func Handler(handler http.Handler) http.Handler {
 func HandlerWithOptions(
     handler http.Handler, options *Options) http.Handler {
   if options == nil {
-    options = &Options{}
+    options = kNoOptions
   }
   return &logHandler{
       handler: handler,
