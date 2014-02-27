@@ -177,7 +177,7 @@ func (h *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             Extra: additional.String(),
             Values: values})
     if err != nil {
-      h.writePanic(err, debug.Stack());
+      h.writePanic(err, debug.Stack())
     }
   }()
   h.handler.ServeHTTP(capture, r)
