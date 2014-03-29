@@ -23,7 +23,7 @@ If server panics before sending a response, weblogs automatically sends a
 
 ## Online Documentation
 
-Online documentation available [here](http://go.pkgdoc.org/github.com/keep94/weblogs).
+Online documentation available [here](http://godoc.org/github.com/keep94/weblogs).
 
 ## Dependencies
 
