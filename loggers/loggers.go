@@ -8,6 +8,8 @@
 package loggers
 
 import (
+  "bufio"
+  "net"
   "net/http"
   "net/url"
   "strings"
@@ -47,6 +49,12 @@ type Capture struct {
   status int
   size int
   statusSet bool
+}
+
+// Support hijacking if underlying response writer supports it
+func (c *Capture) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+  c.statusSet = true
+  return c.ResponseWriter.(http.Hijacker).Hijack()
 }
 
 // The HTTP status code of the response

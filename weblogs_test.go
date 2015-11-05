@@ -6,11 +6,13 @@
 package weblogs_test
 
 import (
+  "bufio"
   "bytes"
   "fmt"
   "github.com/keep94/weblogs"
   "github.com/keep94/weblogs/loggers"
   "io"
+  "net"
   "net/http"
   "net/url"
   "sync"
@@ -155,6 +157,23 @@ func TestSend500OnNoOutput(t *testing.T) {
   }
 }
 
+func TestSupportHijack(t *testing.T) {
+  // test that loggers.Capture supports hijacking
+  buf := &bytes.Buffer{}
+  clock := &clock{Time: kTime}
+  handler := weblogs.HandlerWithOptions(
+      &handler{Clock: clock, Hijack: true},
+      &weblogs.Options{
+          Writer: buf,
+          Logger: weblogs.ApacheCommonLogger(),
+          Now: clock.Now()})
+  handler.ServeHTTP(
+      kNilResponseWriter,
+      newRequest("192.168.101.103:4444", "GET", "/bar/baz?query=short"))
+  expected := "192.168.101.103 - - [23/Mar/2013:13:14:15 +0000] \"GET /bar/baz?query=short HTTP/1.0\" 0 0\n"
+  verifyLogs(t, expected, buf.String())
+}
+
 func TestUnwrappedCallToWriter(t *testing.T) {
   // logging extra should should be silently ignored.
   handler := &handler{LogExtra: "behere"}
@@ -211,12 +230,16 @@ type handler struct {
   Field2 string
   Clock *clock
   ElapsedMillis int
+  Hijack bool
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   // Misbehave by mutating request object to verify that this does not affect
   // logs
   r.URL.Path = "/HandlerMutatedRequest"
+  if h.Hijack {
+    w.(http.Hijacker).Hijack()
+  }
   if h.Status != 0 {
     w.WriteHeader(h.Status)
   }
@@ -252,6 +275,10 @@ func (w nilResponseWriter) WriteHeader(status int) {
 
 func (w nilResponseWriter) Header() http.Header {
   return http.Header{}
+}
+
+func (w nilResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+  return nil, nil, nil
 }
 
 type spyResponseWriter struct {
