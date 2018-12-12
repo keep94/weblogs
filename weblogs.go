@@ -268,7 +268,7 @@ type apacheCombinedLogger struct {
 func (l apacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
 	s := log.R.(*loggers.Snapshot)
 	c := log.W.(*loggers.Capture)
-	fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d \"%s\" \"%s\"\n",
+	fmt.Fprintf(w, "%s - %s [%s] \"%s %s %s\" %d %d \"%s\" \"%s\" %d \n",
 		loggers.StripPort(s.RemoteAddr),
 		loggers.ApacheUser(s.URL.User),
 		log.T.Format("02/Jan/2006:15:04:05 -0700"),
@@ -278,7 +278,8 @@ func (l apacheCombinedLogger) Log(w io.Writer, log *LogRecord) {
 		c.Status(),
 		c.Size(),
 		s.Referer,
-		s.UserAgent)
+		s.UserAgent,
+		log.Duration.Nanoseconds()/1000)
 }
 
 func maybeSend500(c Capture) {
