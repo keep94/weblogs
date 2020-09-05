@@ -6,27 +6,25 @@
 package loggers_test
 
 import (
-  "net/url"
-  "testing"
-  "github.com/keep94/weblogs/loggers"
+	"github.com/keep94/weblogs/loggers"
+	"net/url"
+	"testing"
 )
 
 func TestApacheUser(t *testing.T) {
-  verifyString(t, "-", loggers.ApacheUser(nil))
-  verifyString(t, "-", loggers.ApacheUser(url.User("")))
-  verifyString(t, "tom", loggers.ApacheUser(url.User("tom")))
+	verifyString(t, "-", loggers.ApacheUser(nil))
+	verifyString(t, "-", loggers.ApacheUser(url.User("")))
+	verifyString(t, "tom", loggers.ApacheUser(url.User("tom")))
 }
 
 func TestStripPort(t *testing.T) {
-  verifyString(t, "[::1]", loggers.StripPort("[::1]:4050"))
-  verifyString(t, "10.0.1.3", loggers.StripPort("10.0.1.3:25972"))
-  verifyString(t, "10.0.1.3", loggers.StripPort("10.0.1.3"))
+	verifyString(t, "[::1]", loggers.StripPort("[::1]:4050"))
+	verifyString(t, "10.0.1.3", loggers.StripPort("10.0.1.3:25972"))
+	verifyString(t, "10.0.1.3", loggers.StripPort("10.0.1.3"))
 }
 
 func verifyString(t *testing.T, expected, actual string) {
-  if expected != actual {
-    t.Errorf("Want: %s, Got: %s", expected, actual)
-  }
+	if expected != actual {
+		t.Errorf("Want: %s, Got: %s", expected, actual)
+	}
 }
-
-
