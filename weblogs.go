@@ -9,7 +9,7 @@ package weblogs
 import (
 	"bytes"
 	"fmt"
-	"github.com/gorilla/context"
+	"github.com/keep94/context"
 	"github.com/keep94/weblogs/loggers"
 	"io"
 	"net/http"

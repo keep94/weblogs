@@ -1,2 +1,2 @@
-github.com/gorilla/context v1.1.1 h1:AWwleXJkX/nhcU9bZSnZoi3h/qGYqQAGhq6zZe/aQW8=
-github.com/gorilla/context v1.1.1/go.mod h1:kBGZzfjB9CEq2AlWe17Uuf7NDRt0dE0s8S51q0aT7Yg=
+github.com/keep94/context v0.1.0 h1:FecPv0geuWcdf+8nRmF5RnF6Sk2ahy26jFt7uRivmUw=
+github.com/keep94/context v0.1.0/go.mod h1:IXF7ZIYvKxmGCPiN5tJYbhv5AWaxIDclpOQHuzJsxLI=
